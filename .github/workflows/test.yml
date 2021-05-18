@@ -29,9 +29,9 @@ jobs:
           # NOTE: to get the args from secrets use the following syntax:
           #       ${{ secrets.SOME_SECRET_NAME }}
           args: >
-            http://<CNIL-REST-API-URL>:8000/api/v1
+            http://<CNIL-REST-API-host>:8000/api/v1
             Dal8SLBVMFq3363s5h4AgFrN6U5tjoNC4vmSoPoPIZlWy1M2-nci-MuRLoueCNlh
-            <CNIL-gRPC-API-URL>
+            <CNIL-gRPC-API-host>
             3324
             42139843608656000
             padurean,padurean-alt
