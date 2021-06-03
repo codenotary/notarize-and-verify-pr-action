@@ -19,20 +19,20 @@ jobs:
         uses: docker://codenotary/notarize-and-verify-pr:latest
         with:
           # Args are (in this order):
-          # - LC REST API URL
-          # - LC REST API personal token
-          # - LC gRPC host
-          # - LC gRPC port
-          # - LC ledger ID
+          # - CNIL REST API base URL (e.g. https://<host>:<port>/api/v1)
+          # - CNIL REST API personal token
+          # - CNIL gRPC host
+          # - CNIL gRPC port
+          # - CNIL ledger ID
           # - comma-separated list of required PR approvers (GitHub usernames)
           # - GitHub username (signer ID) of the current PR approver
           # NOTE: to get the args from secrets use the following syntax:
           #       ${{ secrets.SOME_SECRET_NAME }}
           args: >
-            http://<CNIL-REST-API-host>:8000/api/v1
-            Dal8SLBVMFq3363s5h4AgFrN6U5tjoNC4vmSoPoPIZlWy1M2-nci-MuRLoueCNlh
-            <CNIL-gRPC-API-host>
-            3324
-            42139843608656000
-            padurean,padurean-alt
+            ${{ secrets.CNIL_REST_API_URL }}
+            ${{ secrets.CNIL_PERSONAL_TOKEN }}
+            ${{ secrets.CNIL_GRPC_HOST }}
+            ${{ secrets.CNIL_GRPC_PORT }}
+            ${{ secrets.CNIL_LEDGER_ID }}
+            dmacvicar,padurean-alt
             ${{ github.event.review.user.login }}

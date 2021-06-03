@@ -37,11 +37,11 @@ var (
 )
 
 // Expects args:
-//	- LC REST API URL
-//	- LC REST API personal token
-//	- LC gRPC host
-//	- LC gRPC port
-//	- LC ledger ID
+//	- CNIL REST API URL
+//	- CNIL REST API personal token
+//	- CNIL gRPC host
+//	- CNIL gRPC port
+//	- CNIL ledger ID
 //	- comma-separated list of required PR approvers (GitHub usernames)
 //	- GitHub username (signer ID) of the current PR approver
 func main() {
@@ -54,19 +54,19 @@ func main() {
 	}
 
 	// validate inputs
-	lcURL := strings.TrimSuffix(requireArg(1, "LC REST API URL"), "/")
-	lcToken := requireArg(2, "LC REST API personal token")
-	lcHost := requireArg(3, "LC gRPC API host")
-	lcPort := requireArg(4, "LC gRPC API port")
-	lcLedgerID := requireArg(5, "LC ledger ID")
+	cnilURL := strings.TrimSuffix(requireArg(1, "CNIL REST API URL"), "/")
+	cnilToken := requireArg(2, "CNIL REST API personal token")
+	cnilHost := requireArg(3, "CNIL gRPC API host")
+	cnilPort := requireArg(4, "CNIL gRPC API port")
+	cnilLedgerID := requireArg(5, "CNIL ledger ID")
 	requiredApprovers := requireArg(6, "required PR approvers")
 	approver := requireArg(7, "PR approver")
 
 	// get and rotate or create API keys for each required approver
-	lcAPIOptions := &lcOptions{baseURL: lcURL, token: lcToken, ledgerID: lcLedgerID}
+	cnilAPIOptions := &cnilOptions{baseURL: cnilURL, token: cnilToken, ledgerID: cnilLedgerID}
 	apiKeyPerRequiredApprover := make(map[string]string)
 	if err := getAndRotateOrCreateAPIKeys(
-		lcAPIOptions,
+		cnilAPIOptions,
 		requiredApprovers,
 		&apiKeyPerRequiredApprover,
 	); err != nil {
@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// make sure the local VCN store directory exists
-	options := &vcnOptions{storeDir: "./.vcn", lcHost: lcHost, lcPort: lcPort}
+	options := &vcnOptions{storeDir: "./.vcn", cnilHost: cnilHost, cnilPort: cnilPort}
 	if err := os.MkdirAll(options.storeDir, os.ModeDir); err != nil {
 		fmt.Printf(red, fmt.Sprintf(
 			"error creating VCN local store directory %s: %v\n", options.storeDir, err))
@@ -92,7 +92,7 @@ func main() {
 	// notarize the git repository artifact for the current PR approver (if required)
 	if notarizationKey, ok := apiKeyPerRequiredApprover[approver]; ok {
 		fmt.Println("\nNotarizing PR ...")
-		options.lcAPIKey = notarizationKey
+		options.cnilAPIKey = notarizationKey
 		if err := notarize(artifact, options); err != nil {
 			fmt.Printf(red, fmt.Sprintf("ABORTING: notarization error: %v\n", err))
 			os.Exit(1)
@@ -115,35 +115,35 @@ func main() {
 			"\n   Verifying if the PR has been notarized for %s ...\n",
 			requiredApprover)
 
-		options.lcAPIKey = apiKey
-		lcArtifact, err := verify(artifact, options)
+		options.cnilAPIKey = apiKey
+		cnilArtifact, err := verify(artifact, options)
 		if err != nil {
 			fmt.Printf(red, fmt.Sprintf(
 				"   ABORTING: error verifying PR for required approver %s: %v\n",
 				requiredApprover, err))
 			os.Exit(1)
 		}
-		if lcArtifact == nil {
+		if cnilArtifact == nil {
 			fmt.Printf(yellow, fmt.Sprintf(
 				"   PR is NOT notarized for required approver %s\n", requiredApprover))
 			continue
 		}
 
-		if lcArtifact.Status == vcnMeta.StatusTrusted {
+		if cnilArtifact.Status == vcnMeta.StatusTrusted {
 			notarizedApprovers = append(notarizedApprovers, requiredApprover)
 		}
 
-		lcArtifactDetails := fmt.Sprintf(`
+		cnilArtifactDetails := fmt.Sprintf(`
       Status:     %s
       PR commit:  %s
       Signer ID:  %s
 `,
-			coloredStatus(lcArtifact.Status),
-			lcArtifact.Name,
-			lcArtifact.Signer)
+			coloredStatus(cnilArtifact.Status),
+			cnilArtifact.Name,
+			cnilArtifact.Signer)
 
 		fmt.Printf(
-			"   Verification details for approver %s: %s", requiredApprover, lcArtifactDetails)
+			"   Verification details for approver %s: %s", requiredApprover, cnilArtifactDetails)
 
 	}
 	fmt.Println("")
@@ -174,14 +174,14 @@ func requireArg(argIndex int, argName string) string {
 	return argVal
 }
 
-type lcOptions struct {
+type cnilOptions struct {
 	baseURL  string
 	token    string
 	ledgerID string
 }
 
 func getAndRotateOrCreateAPIKeys(
-	options *lcOptions,
+	options *cnilOptions,
 	requiredApprovers string,
 	apiKeyPerRequiredApprover *map[string]string,
 ) error {
@@ -218,7 +218,7 @@ type APIKeysPageResponse struct {
 	Items []*APIKeyResponse `json:"items"`
 }
 
-func getAPIKey(options *lcOptions, signerID string) (*APIKeyResponse, error) {
+func getAPIKey(options *cnilOptions, signerID string) (*APIKeyResponse, error) {
 	url := fmt.Sprintf(
 		"%s/api_keys/identity/%s", options.baseURL, url.PathEscape(signerID))
 	responsePayload := APIKeysPageResponse{}
@@ -245,7 +245,7 @@ type APIKeyCreateReq struct {
 	ReadOnly bool   `json:"read_only"`
 }
 
-func createAPIKey(options *lcOptions, signerID string) (*APIKeyResponse, error) {
+func createAPIKey(options *cnilOptions, signerID string) (*APIKeyResponse, error) {
 	url := fmt.Sprintf("%s/ledgers/%s/api_keys", options.baseURL, options.ledgerID)
 	payload := APIKeyCreateReq{Name: signerID}
 	payloadJSON, err := json.Marshal(&payload)
@@ -269,7 +269,7 @@ func createAPIKey(options *lcOptions, signerID string) (*APIKeyResponse, error) 
 	return &responsePayload, nil
 }
 
-func rotateAPIKey(options *lcOptions, apiKeyID string) (*APIKeyResponse, error) {
+func rotateAPIKey(options *cnilOptions, apiKeyID string) (*APIKeyResponse, error) {
 	url := fmt.Sprintf("%s/ledgers/%s/api_keys/%s/rotate", options.baseURL, options.ledgerID, apiKeyID)
 	responsePayload := APIKeyResponse{}
 	if err := sendHTTPRequest(
@@ -327,19 +327,19 @@ func sendHTTPRequest(
 }
 
 type vcnOptions struct {
-	storeDir string
-	lcHost   string
-	lcPort   string
-	lcAPIKey string
+	storeDir   string
+	cnilHost   string
+	cnilPort   string
+	cnilAPIKey string
 }
 
-func newVCNLCUser(options *vcnOptions) *vcnAPI.LcUser {
+func newVCNCNILUser(options *vcnOptions) *vcnAPI.LcUser {
 	vcnStore.SetDir(options.storeDir)
 	return vcnAPI.NewLcUserVolatile(
-		options.lcAPIKey,
+		options.cnilAPIKey,
 		"",
-		options.lcHost,
-		options.lcPort)
+		options.cnilHost,
+		options.cnilPort)
 }
 
 func vcnArtifactFromGitRepo() (*vcnAPI.Artifact, error) {
@@ -357,15 +357,15 @@ func vcnArtifactFromGitRepo() (*vcnAPI.Artifact, error) {
 }
 
 func notarize(vcnArtifact *vcnAPI.Artifact, options *vcnOptions) error {
-	vcnLCUser := newVCNLCUser(options)
-	err := vcnLCUser.Client.Connect()
+	vcnCNILUser := newVCNCNILUser(options)
+	err := vcnCNILUser.Client.Connect()
 	if err != nil {
 		return fmt.Errorf("vcn connection error: %v", err)
 	}
-	defer vcnLCUser.Client.Disconnect()
+	defer vcnCNILUser.Client.Disconnect()
 
 	var state vcnMeta.Status
-	_, _, err = vcnLCUser.Sign(*vcnArtifact, vcnAPI.LcSignWithStatus(state))
+	_, _, err = vcnCNILUser.Sign(*vcnArtifact, vcnAPI.LcSignWithStatus(state))
 	if err != nil {
 		return fmt.Errorf("error signing artifact: %v", err)
 	}
@@ -374,14 +374,14 @@ func notarize(vcnArtifact *vcnAPI.Artifact, options *vcnOptions) error {
 }
 
 func verify(artifact *vcnAPI.Artifact, options *vcnOptions) (*vcnAPI.LcArtifact, error) {
-	vcnLCUser := newVCNLCUser(options)
-	err := vcnLCUser.Client.Connect()
+	vcnCNILUser := newVCNCNILUser(options)
+	err := vcnCNILUser.Client.Connect()
 	if err != nil {
 		return nil, fmt.Errorf("vcn connection error: %v", err)
 	}
-	defer vcnLCUser.Client.Disconnect()
+	defer vcnCNILUser.Client.Disconnect()
 
-	lcArtifact, verified, err := vcnLCUser.LoadArtifact(artifact.Hash, "", "", 0)
+	cnilArtifact, verified, err := vcnCNILUser.LoadArtifact(artifact.Hash, "", "", 0)
 	if err == vcnAPI.ErrNotFound {
 		return nil, nil
 	}
@@ -391,14 +391,14 @@ func verify(artifact *vcnAPI.Artifact, options *vcnOptions) (*vcnAPI.LcArtifact,
 
 	if !verified {
 		return nil, errors.New(
-			`ledger might be compromised: LC verification status is "false"`)
+			`ledger might be compromised: CNIL verification status is "false"`)
 	}
 
-	if lcArtifact.Revoked != nil && !lcArtifact.Revoked.IsZero() {
-		lcArtifact.Status = vcnMeta.StatusApikeyRevoked
+	if cnilArtifact.Revoked != nil && !cnilArtifact.Revoked.IsZero() {
+		cnilArtifact.Status = vcnMeta.StatusApikeyRevoked
 	}
 
-	return lcArtifact, nil
+	return cnilArtifact, nil
 }
 
 func coloredStatus(status vcnMeta.Status) string {
