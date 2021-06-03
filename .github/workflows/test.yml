@@ -16,7 +16,7 @@ jobs:
           ref: ${{ github.event.review.commit_id }}
 
       - name: Notarize and verify PR
-        uses: docker://codenotary/notarize-and-verify-commit:latest
+        uses: docker://codenotary/notarize-and-verify-pr:latest
         with:
           # Args are (in this order):
           # - LC REST API URL
