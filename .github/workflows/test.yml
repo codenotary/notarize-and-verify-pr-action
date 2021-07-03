@@ -16,23 +16,13 @@ jobs:
           ref: ${{ github.event.review.commit_id }}
 
       - name: Notarize and verify PR
-        uses: docker://codenotary/notarize-and-verify-pr:latest
+        uses: codenotary/notarize-and-verify-pr-action@v1.0.0
+        # uses: codenotary/notarize-and-verify-pr-action@main
         with:
-          # Args are (in this order):
-          # - CNIL REST API base URL (e.g. https://<host>:<port>/api/v1)
-          # - CNIL REST API personal token
-          # - CNIL gRPC host
-          # - CNIL gRPC port
-          # - CNIL ledger ID
-          # - comma-separated list of required PR approvers (GitHub usernames)
-          # - GitHub username (signer ID) of the current PR approver
-          # NOTE: to get the args from secrets use the following syntax:
-          #       ${{ secrets.SOME_SECRET_NAME }}
-          args: >
-            ${{ secrets.CNIL_REST_API_URL }}
-            ${{ secrets.CNIL_PERSONAL_TOKEN }}
-            ${{ secrets.CNIL_GRPC_HOST }}
-            ${{ secrets.CNIL_GRPC_PORT }}
-            ${{ secrets.CNIL_LEDGER_ID }}
-            dmacvicar,padurean-alt
-            ${{ github.event.review.user.login }}
+          cnil_rest_api_url: ${{ secrets.CNIL_REST_API_URL }}
+          cnil_personal_token: ${{ secrets.CNIL_PERSONAL_TOKEN }}
+          cnil_grpc_host: ${{ secrets.CNIL_GRPC_HOST }}
+          cnil_grpc_port: ${{ secrets.CNIL_GRPC_PORT }}
+          cnil_ledger: ${{ secrets.CNIL_LEDGER_ID }}
+          required_pr_approvers: dmacvicar,padurean-alt
+          current_pr_approver: ${{ github.event.review.user.login }}
