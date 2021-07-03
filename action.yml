@@ -1,0 +1,39 @@
+name: 'notarize-and-verify-pr-action'
+description: 'This official action from CodeNotary allows to notarize the latest commit on a Pull Request for each approver, and then verify it was notarized by a configurable list of signer IDs.'
+branding:
+  icon: 'user-check'
+  color: 'blue'
+inputs:
+  cnil_rest_api_url:
+    description: 'CNIL REST API URL: https://<host>:<port>/api/v1.'
+    required: true
+  cnil_personal_token:
+    description: 'CNIL personal token.'
+    required: true
+  cnil_grpc_host:
+    description: 'CNIL gRPC host.'
+    required: true
+  cnil_grpc_port:
+    description: 'CNIL gRPC port.'
+    required: true
+  cnil_ledger:
+    description: 'CNIL ledger ID.'
+    required: true
+  required_pr_approvers:
+    description: 'Comma-separated list of required PR approvers (GitHub usernames).'
+    required: true
+  current_pr_approver:
+    description: 'GitHub username (signer ID) of the current PR approver (which triggered the workflow).'
+    required: true
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  # image: 'docker://codenotary/notarize-and-verify-pr:latest'
+  args:
+    - ${{ inputs.cnil_rest_api_url }}
+    - ${{ inputs.cnil_personal_token }}
+    - ${{ inputs.cnil_grpc_host }}
+    - ${{ inputs.cnil_grpc_port }}
+    - ${{ inputs.cnil_ledger }}
+    - ${{ inputs.required_pr_approvers }}
+    - ${{ inputs.current_pr_approver }}
