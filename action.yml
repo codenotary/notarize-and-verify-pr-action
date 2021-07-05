@@ -16,6 +16,9 @@ inputs:
   cnil_grpc_port:
     description: 'CNIL gRPC port.'
     required: true
+  cnil_grpc_no_tls:
+    description: 'Specifies to not use TLS for the VCN notarization/verification. Default is false.'
+    required: true
   cnil_ledger:
     description: 'CNIL ledger ID.'
     required: true
@@ -34,6 +37,7 @@ runs:
     - ${{ inputs.cnil_personal_token }}
     - ${{ inputs.cnil_grpc_host }}
     - ${{ inputs.cnil_grpc_port }}
+    - ${{ inputs.cnil_grpc_no_tls }}
     - ${{ inputs.cnil_ledger }}
     - ${{ inputs.required_pr_approvers }}
     - ${{ inputs.current_pr_approver }}

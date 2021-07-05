@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,13 +42,14 @@ var (
 //	- CNIL REST API personal token
 //	- CNIL gRPC host
 //	- CNIL gRPC port
+//  - CNIL gRPC no TLS
 //	- CNIL ledger ID
 //	- comma-separated list of required PR approvers (GitHub usernames)
 //	- GitHub username (signer ID) of the current PR approver
 func main() {
 
 	// validate number of inputs
-	if len(os.Args)-1 != 7 {
+	if len(os.Args)-1 != 8 {
 		fmt.Printf(red, fmt.Sprintf(
 			"invalid args %+v: expected 7, got %d\n", os.Args, len(os.Args)-1))
 		os.Exit(1)
@@ -58,9 +60,22 @@ func main() {
 	cnilToken := requireArg(2, "CNIL REST API personal token")
 	cnilHost := requireArg(3, "CNIL gRPC API host")
 	cnilPort := requireArg(4, "CNIL gRPC API port")
-	cnilLedgerID := requireArg(5, "CNIL ledger ID")
-	requiredApprovers := requireArg(6, "required PR approvers")
-	approver := requireArg(7, "PR approver")
+	cnilNoTLS := requireArg(5, "CNIL gRPC no TLS")
+	cnilLedgerID := requireArg(6, "CNIL ledger ID")
+	requiredApprovers := requireArg(7, "required PR approvers")
+	approver := requireArg(8, "PR approver")
+
+	var err error
+	var noTLS bool
+	if len(cnilNoTLS) > 0 {
+		noTLS, err = strconv.ParseBool(cnilNoTLS)
+		if err != nil {
+			fmt.Print(red, fmt.Sprintf(
+				"ABORTING: error parsing the \"no TLS\" argument value \"%s\": %v\n",
+				cnilNoTLS, err))
+			os.Exit(1)
+		}
+	}
 
 	// get and rotate or create API keys for each required approver
 	cnilAPIOptions := &cnilOptions{baseURL: cnilURL, token: cnilToken, ledgerID: cnilLedgerID}
@@ -83,11 +98,19 @@ func main() {
 	}
 
 	// make sure the local VCN store directory exists
-	options := &vcnOptions{storeDir: "./.vcn", cnilHost: cnilHost, cnilPort: cnilPort}
-	if err := os.MkdirAll(options.storeDir, os.ModeDir); err != nil {
+	options := &vcnOptions{
+		storeDir: "./.vcn",
+		cnilHost: cnilHost,
+		cnilPort: cnilPort,
+		noTLS:    noTLS,
+	}
+	if err := os.MkdirAll(options.storeDir, os.ModePerm); err != nil {
 		fmt.Printf(red, fmt.Sprintf(
 			"error creating VCN local store directory %s: %v\n", options.storeDir, err))
 	}
+	// initialize VCN store
+	vcnStore.SetDir(options.storeDir)
+	vcnStore.LoadConfig()
 
 	// notarize the git repository artifact for the current PR approver (if required)
 	if notarizationKey, ok := apiKeyPerRequiredApprover[approver]; ok {
@@ -331,15 +354,7 @@ type vcnOptions struct {
 	cnilHost   string
 	cnilPort   string
 	cnilAPIKey string
-}
-
-func newVCNCNILUser(options *vcnOptions) *vcnAPI.LcUser {
-	vcnStore.SetDir(options.storeDir)
-	return vcnAPI.NewLcUserVolatile(
-		options.cnilAPIKey,
-		"",
-		options.cnilHost,
-		options.cnilPort)
+	noTLS      bool
 }
 
 func vcnArtifactFromGitRepo() (*vcnAPI.Artifact, error) {
@@ -357,10 +372,13 @@ func vcnArtifactFromGitRepo() (*vcnAPI.Artifact, error) {
 }
 
 func notarize(vcnArtifact *vcnAPI.Artifact, options *vcnOptions) error {
-	vcnCNILUser := newVCNCNILUser(options)
-	err := vcnCNILUser.Client.Connect()
+	vcnCNILUser, err := vcnAPI.NewLcUser(
+		options.cnilAPIKey, "", options.cnilHost, options.cnilPort, "", false, options.noTLS)
 	if err != nil {
-		return fmt.Errorf("vcn connection error: %v", err)
+		return fmt.Errorf("error initializing vcn client: %v", err)
+	}
+	if err := vcnCNILUser.Client.Connect(); err != nil {
+		return fmt.Errorf("error connecting vcn client: %v", err)
 	}
 	defer vcnCNILUser.Client.Disconnect()
 
@@ -374,9 +392,12 @@ func notarize(vcnArtifact *vcnAPI.Artifact, options *vcnOptions) error {
 }
 
 func verify(artifact *vcnAPI.Artifact, options *vcnOptions) (*vcnAPI.LcArtifact, error) {
-	vcnCNILUser := newVCNCNILUser(options)
-	err := vcnCNILUser.Client.Connect()
+	vcnCNILUser, err := vcnAPI.NewLcUser(
+		options.cnilAPIKey, "", options.cnilHost, options.cnilPort, "", false, options.noTLS)
 	if err != nil {
+		return nil, fmt.Errorf("error initializing vcn client: %v", err)
+	}
+	if err := vcnCNILUser.Client.Connect(); err != nil {
 		return nil, fmt.Errorf("vcn connection error: %v", err)
 	}
 	defer vcnCNILUser.Client.Disconnect()
