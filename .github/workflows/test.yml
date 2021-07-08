@@ -3,7 +3,7 @@ name: test
 on:
   pull_request_review:
     types: [submitted]
-    branches: ['main']
+    branches: [main, test-action]
 
 jobs:
   test-usage:
@@ -19,11 +19,13 @@ jobs:
         uses: codenotary/notarize-and-verify-pr-action@v1.0.0
         # uses: codenotary/notarize-and-verify-pr-action@main
         with:
-          cnil_rest_api_url: ${{ secrets.CNIL_REST_API_URL }}
-          cnil_personal_token: ${{ secrets.CNIL_PERSONAL_TOKEN }}
           cnil_grpc_host: ${{ secrets.CNIL_GRPC_HOST }}
           cnil_grpc_port: ${{ secrets.CNIL_GRPC_PORT }}
           cnil_grpc_no_tls: false
-          cnil_ledger: ${{ secrets.CNIL_LEDGER_ID }}
-          required_pr_approvers: dmacvicar,padurean-alt
           current_pr_approver: ${{ github.event.review.user.login }}
+          cnil_api_keys: ${{ secrets.CNIL_API_KEYS }}
+          # if the cnil_api_keys (above) is specified, the following inputs will be ignored:
+          cnil_rest_api_url: ${{ secrets.CNIL_REST_API_URL }}
+          cnil_personal_token: ${{ secrets.CNIL_PERSONAL_TOKEN }}
+          cnil_ledger: ${{ secrets.CNIL_LEDGER_ID }}
+          required_pr_approvers: mmeloni,padurean-alt

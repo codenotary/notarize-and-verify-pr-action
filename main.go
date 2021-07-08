@@ -38,39 +38,65 @@ var (
 )
 
 // Expects args:
-//	- CNIL REST API URL
-//	- CNIL REST API personal token
 //	- CNIL gRPC host
 //	- CNIL gRPC port
 //  - CNIL gRPC no TLS
-//	- CNIL ledger ID
-//	- comma-separated list of required PR approvers (GitHub usernames)
 //	- GitHub username (signer ID) of the current PR approver
+//	- CNIL API key (optional)
+//	- CNIL REST API URL (required if CNIL API key is empty)
+//	- CNIL REST API personal token (required if CNIL API key is empty)
+//	- CNIL ledger ID (required if CNIL API key is empty)
+//	- comma-separated list of required PR approvers (GitHub usernames) (required if CNIL API key is empty)
 func main() {
 
 	// validate number of inputs
-	if len(os.Args)-1 != 8 {
+	expectedNbArgs := 9
+	if len(os.Args)-1 != expectedNbArgs {
 		fmt.Printf(red, fmt.Sprintf(
-			"invalid args %+v: expected 7, got %d\n", os.Args, len(os.Args)-1))
+			"invalid args %+v: expected %d, got %d\n", os.Args, expectedNbArgs, len(os.Args)-1))
 		os.Exit(1)
 	}
 
 	// validate inputs
-	cnilURL := strings.TrimSuffix(requireArg(1, "CNIL REST API URL"), "/")
-	cnilToken := requireArg(2, "CNIL REST API personal token")
-	cnilHost := requireArg(3, "CNIL gRPC API host")
-	cnilPort := requireArg(4, "CNIL gRPC API port")
-	cnilNoTLS := requireArg(5, "CNIL gRPC no TLS")
-	cnilLedgerID := requireArg(6, "CNIL ledger ID")
-	requiredApprovers := requireArg(7, "required PR approvers")
-	approver := requireArg(8, "PR approver")
+	cnilHost := getArg(1, "CNIL gRPC API host", true)
+	cnilPort := getArg(2, "CNIL gRPC API port", true)
+	cnilNoTLS := getArg(3, "CNIL gRPC no TLS", true)
+	approver := getArg(4, "PR approver", true)
+	cnilAPIKeysStr := getArg(5, "CNIL API key(s)", false)
+	cnilURL := strings.TrimSuffix(getArg(6, "CNIL REST API URL", false), "/")
+	cnilToken := getArg(7, "CNIL REST API personal token", false)
+	cnilLedgerID := getArg(8, "CNIL ledger ID", false)
+	requiredApprovers := getArg(9, "required PR approvers", false)
+
+	var emptyRequiredArgs []string
+	if len(cnilAPIKeysStr) == 0 {
+		if len(cnilURL) == 0 {
+			emptyRequiredArgs = append(emptyRequiredArgs, "CNIL REST API URL")
+		}
+		if len(cnilToken) == 0 {
+			emptyRequiredArgs = append(emptyRequiredArgs, "CNIL REST API personal token")
+		}
+		if len(cnilLedgerID) == 0 {
+			emptyRequiredArgs = append(emptyRequiredArgs, "CNIL ledger ID")
+		}
+		if len(requiredApprovers) == 0 {
+			emptyRequiredArgs = append(emptyRequiredArgs, "required PR approvers")
+		}
+	}
+	if len(emptyRequiredArgs) > 0 {
+		fmt.Printf(red, fmt.Sprintf(
+			"ABORTING: no API key has been specified, but the following argument(s) are also unspecified: \n   %s\n"+
+				"These arguments are required to create/rotate API key(s) for the required PR approver(s).",
+			strings.Join(emptyRequiredArgs, ", ")))
+		os.Exit(1)
+	}
 
 	var err error
 	var noTLS bool
 	if len(cnilNoTLS) > 0 {
 		noTLS, err = strconv.ParseBool(cnilNoTLS)
 		if err != nil {
-			fmt.Print(red, fmt.Sprintf(
+			fmt.Printf(red, fmt.Sprintf(
 				"ABORTING: error parsing the \"no TLS\" argument value \"%s\": %v\n",
 				cnilNoTLS, err))
 			os.Exit(1)
@@ -78,15 +104,37 @@ func main() {
 	}
 
 	// get and rotate or create API keys for each required approver
-	cnilAPIOptions := &cnilOptions{baseURL: cnilURL, token: cnilToken, ledgerID: cnilLedgerID}
 	apiKeyPerRequiredApprover := make(map[string]string)
-	if err := getAndRotateOrCreateAPIKeys(
-		cnilAPIOptions,
-		requiredApprovers,
-		&apiKeyPerRequiredApprover,
-	); err != nil {
-		fmt.Printf(red, fmt.Sprintf("ABORTING: %v\n", err))
-		os.Exit(1)
+	if len(cnilAPIKeysStr) == 0 {
+		cnilAPIOptions := &cnilOptions{baseURL: cnilURL, token: cnilToken, ledgerID: cnilLedgerID}
+		if err := getAndRotateOrCreateAPIKeys(
+			cnilAPIOptions,
+			requiredApprovers,
+			apiKeyPerRequiredApprover,
+		); err != nil {
+			fmt.Printf(red, fmt.Sprintf("ABORTING: %v\n", err))
+			os.Exit(1)
+		}
+	} else {
+		var requiredApproversArr []string
+		cnilAPIKeys := strings.Split(cnilAPIKeysStr, ",")
+		for _, ak := range cnilAPIKeys {
+			pieces := strings.Split(ak, ".")
+			if len(pieces) < 2 {
+				fmt.Printf(red,
+					"the specified API key is not supported: must be of the form <identity>.<secret>")
+				os.Exit(1)
+			}
+			signerID := strings.TrimSuffix(strings.Join(pieces[:len(pieces)-1], "."), identitySuffix)
+			if _, ok := apiKeyPerRequiredApprover[signerID]; ok {
+				fmt.Printf(red, fmt.Sprintf(
+					"more than one API key has been specified for the same signer ID \"%s\"", signerID))
+				os.Exit(1)
+			}
+			apiKeyPerRequiredApprover[signerID] = ak
+			requiredApproversArr = append(requiredApproversArr, signerID)
+		}
+		requiredApprovers = strings.Join(requiredApproversArr, ", ")
 	}
 
 	// create VCN artifact from the git repository folder
@@ -187,10 +235,10 @@ func main() {
 		len(apiKeyPerRequiredApprover), requiredApprovers))
 }
 
-func requireArg(argIndex int, argName string) string {
+func getArg(argIndex int, argName string, required bool) string {
 	argVal := strings.TrimSpace(os.Args[argIndex])
 	// fmt.Printf("  - %s: %s (length: %d)\n", argName, argVal, len(argVal))
-	if len(argVal) == 0 {
+	if required && len(argVal) == 0 {
 		fmt.Printf(red, fmt.Sprintf("ABORTING: required argument value %s is empty\n", argName))
 		os.Exit(1)
 	}
@@ -206,7 +254,7 @@ type cnilOptions struct {
 func getAndRotateOrCreateAPIKeys(
 	options *cnilOptions,
 	requiredApprovers string,
-	apiKeyPerRequiredApprover *map[string]string,
+	apiKeyPerRequiredApprover map[string]string,
 ) error {
 	for i, requiredApprover := range strings.Split(requiredApprovers, ",") {
 		requiredApprover = strings.TrimSpace(requiredApprover)
@@ -226,7 +274,7 @@ func getAndRotateOrCreateAPIKeys(
 			return fmt.Errorf("error getting or creating / rotating API key for approver %s: %v",
 				requiredApprover, err)
 		}
-		(*apiKeyPerRequiredApprover)[requiredApprover] = apiKey.Key
+		apiKeyPerRequiredApprover[requiredApprover] = apiKey.Key
 	}
 	return nil
 }
