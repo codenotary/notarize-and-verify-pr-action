@@ -38,12 +38,12 @@ var (
 )
 
 // Expects args:
-//	- CNIL gRPC host
-//	- CNIL gRPC port
-//  - CNIL gRPC no TLS
-//	- GitHub username (signer ID) of the current PR approver
+//	- CNIL host (required)
+//	- CNIL gRPC API port (optional, default 443)
+//  - CNIL gRPC no TLS (optional)
+//	- GitHub username (signer ID) of the current PR approver (required)
 //	- CNIL API key (optional)
-//	- CNIL REST API URL (required if CNIL API key is empty)
+//	- CNIL REST API port (optional, default 443, only used if CNIL API key is empty)
 //	- CNIL REST API personal token (required if CNIL API key is empty)
 //	- CNIL ledger ID (required if CNIL API key is empty)
 //	- comma-separated list of required PR approvers (GitHub usernames) (required if CNIL API key is empty)
@@ -58,21 +58,20 @@ func main() {
 	}
 
 	// validate inputs
-	cnilHost := getArg(1, "CNIL gRPC API host", true)
-	cnilPort := getArg(2, "CNIL gRPC API port", true)
-	cnilNoTLS := getArg(3, "CNIL gRPC no TLS", true)
-	approver := getArg(4, "PR approver", true)
-	cnilAPIKeysStr := getArg(5, "CNIL API key(s)", false)
-	cnilURL := strings.TrimSuffix(getArg(6, "CNIL REST API URL", false), "/")
-	cnilToken := getArg(7, "CNIL REST API personal token", false)
-	cnilLedgerID := getArg(8, "CNIL ledger ID", false)
-	requiredApprovers := getArg(9, "required PR approvers", false)
+	cnilHost := getArg(1, "CNIL host", true, "")
+	cnilgRPCPort := getArg(2, "CNIL gRPC API port", false, "443")
+	cnilNoTLS := getArg(3, "CNIL gRPC no TLS", false, "false")
+	approver := getArg(4, "PR approver", true, "")
+	cnilAPIKeysStr := getArg(5, "CNIL API key(s)", false, "")
+	cnilRESTPort := getArg(6, "CNIL REST API port", false, "443")
+	cnilToken := getArg(7, "CNIL REST API personal token", false, "")
+	cnilLedgerID := getArg(8, "CNIL ledger ID", false, "")
+	requiredApprovers := getArg(9, "required PR approvers", false, "")
+
+	cnilRESTURL := fmt.Sprintf("https://%s:%s/api/v1", cnilHost, cnilRESTPort)
 
 	var emptyRequiredArgs []string
 	if len(cnilAPIKeysStr) == 0 {
-		if len(cnilURL) == 0 {
-			emptyRequiredArgs = append(emptyRequiredArgs, "CNIL REST API URL")
-		}
 		if len(cnilToken) == 0 {
 			emptyRequiredArgs = append(emptyRequiredArgs, "CNIL REST API personal token")
 		}
@@ -91,22 +90,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	var err error
-	var noTLS bool
-	if len(cnilNoTLS) > 0 {
-		noTLS, err = strconv.ParseBool(cnilNoTLS)
-		if err != nil {
-			fmt.Printf(red, fmt.Sprintf(
-				"ABORTING: error parsing the \"no TLS\" argument value \"%s\": %v\n",
-				cnilNoTLS, err))
-			os.Exit(1)
-		}
+	noTLS, err := strconv.ParseBool(cnilNoTLS)
+	if err != nil {
+		fmt.Printf(red, fmt.Sprintf(
+			"ABORTING: error parsing the \"no TLS\" argument value \"%s\": %v\n",
+			cnilNoTLS, err))
+		os.Exit(1)
 	}
 
 	// get and rotate or create API keys for each required approver
 	apiKeyPerRequiredApprover := make(map[string]string)
 	if len(cnilAPIKeysStr) == 0 {
-		cnilAPIOptions := &cnilOptions{baseURL: cnilURL, token: cnilToken, ledgerID: cnilLedgerID}
+		cnilAPIOptions := &cnilOptions{
+			baseURL:  cnilRESTURL,
+			token:    cnilToken,
+			ledgerID: cnilLedgerID,
+		}
 		if err := getAndRotateOrCreateAPIKeys(
 			cnilAPIOptions,
 			requiredApprovers,
@@ -149,7 +148,7 @@ func main() {
 	options := &vcnOptions{
 		storeDir: "./.vcn",
 		cnilHost: cnilHost,
-		cnilPort: cnilPort,
+		cnilPort: cnilgRPCPort,
 		noTLS:    noTLS,
 	}
 	if err := os.MkdirAll(options.storeDir, os.ModePerm); err != nil {
@@ -235,12 +234,15 @@ func main() {
 		len(apiKeyPerRequiredApprover), requiredApprovers))
 }
 
-func getArg(argIndex int, argName string, required bool) string {
+func getArg(argIndex int, argName string, required bool, defaultVal string) string {
 	argVal := strings.TrimSpace(os.Args[argIndex])
 	// fmt.Printf("  - %s: %s (length: %d)\n", argName, argVal, len(argVal))
 	if required && len(argVal) == 0 {
 		fmt.Printf(red, fmt.Sprintf("ABORTING: required argument value %s is empty\n", argName))
 		os.Exit(1)
+	}
+	if len(argVal) == 0 && len(defaultVal) > 0 {
+		argVal = defaultVal
 	}
 	return argVal
 }

@@ -4,24 +4,27 @@ branding:
   icon: 'user-check'
   color: 'blue'
 inputs:
-  cnil_grpc_host:
-    description: 'CNIL gRPC host.'
+  cnil_host:
+    description: 'CNIL host.'
     required: true
   cnil_grpc_port:
-    description: 'CNIL gRPC port.'
-    required: true
+    description: 'CNIL gRPC API port.'
+    required: false
+    default: 443
   cnil_grpc_no_tls:
-    description: 'Specifies to not use TLS for the VCN notarization/verification. Default is false.'
-    required: true
+    description: 'Specifies to not use TLS for the VCN notarization/verification.'
+    required: false
+    default: false
   current_pr_approver:
     description: 'GitHub username (signer ID) of the current PR approver (which triggered the workflow).'
     required: true
   cnil_api_keys:
     description: 'Comma-separated list of CNIL API keys. Their signer IDs (i.e. their prefixes) must match GitHub usernames (e.g. <github-username>@github or just <github-username). Example: ghuser1.XXX...,ghuser2@github.YYY...'
     required: false
-  cnil_rest_api_url:
-    description: 'CNIL REST API URL: https://<host>:<port>/api/v1. Required if cnil_api_keys is not specified.'
+  cnil_http_port:
+    description: 'CNIL HTTP API port. Only used if cnil_api_keys is not specified.'
     required: false
+    default: 443
   cnil_personal_token:
     description: 'CNIL personal token. Required if cnil_api_keys is not specified.'
     required: false
@@ -36,12 +39,12 @@ runs:
   image: 'docker://codenotary/notarize-and-verify-pr:latest'
   # image: 'Dockerfile'
   args:
-    - ${{ inputs.cnil_grpc_host }}
+    - ${{ inputs.cnil_host }}
     - ${{ inputs.cnil_grpc_port }}
     - ${{ inputs.cnil_grpc_no_tls }}
     - ${{ inputs.current_pr_approver }}
     - ${{ inputs.cnil_api_keys }}
-    - ${{ inputs.cnil_rest_api_url }}
+    - ${{ inputs.cnil_http_port }}
     - ${{ inputs.cnil_personal_token }}
     - ${{ inputs.cnil_ledger }}
     - ${{ inputs.required_pr_approvers }}
