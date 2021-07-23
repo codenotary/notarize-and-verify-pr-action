@@ -20,12 +20,12 @@ jobs:
         # uses: codenotary/notarize-and-verify-pr-action@main
         with:
           cnil_host: ${{ secrets.CNIL_HOST }}
-          # if this input is ommitted, default port 443 will be used:
+          # if this input is omitted, default port 443 will be used:
           cnil_grpc_port: 33443
           current_pr_approver: ${{ github.event.review.user.login }}
           cnil_api_keys: ${{ secrets.CNIL_API_KEYS }}
 
-          # if this input is ommitted, default port 443 will be used:
+          # if this input is omitted, default port 443 will be used:
           # cnil_http_port: 33443
 
           # if the cnil_api_keys input (above) is omitted, then the following 3 inputs are required:
